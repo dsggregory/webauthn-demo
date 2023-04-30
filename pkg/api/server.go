@@ -37,7 +37,7 @@ func jsonResponse(w http.ResponseWriter, d interface{}, c int) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(c)
-	fmt.Fprintf(w, "%s", dj)
+	_, _ = w.Write(dj)
 
 	logrus.WithField("httpStatusCode", c).Debug(string(dj))
 }
@@ -168,7 +168,9 @@ func (s *Server) beginLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// store session data as marshaled JSON
+	// Store session data as marshaled JSON.
+	// sessionData.Challenge is a JWT and looks like:
+	//  * `2kTSuleq0Xz0SFyqwO-kqfHbKIT2PAaGdDaW5E7e4kw`
 	err = s.sessionStore.SaveWebauthnSession("authentication", sessionData, r, w)
 	if err != nil {
 		l.WithError(err).Error("SaveWebauthnSession failed")
@@ -224,6 +226,7 @@ func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, "Login Success", http.StatusOK)
 }
 
+// GET /logout
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	logrus.Debug("Logout")
 
@@ -238,9 +241,32 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, "Logout Success", http.StatusOK)
 }
 
+// test to figure out how client would validate a webauthn-session cookie outside of login flow
+func (s *Server) validate(w http.ResponseWriter, r *http.Request) error {
+	// load the session data from the `webauthn-session` cookie
+	sessionData, err := s.sessionStore.GetWebauthnSession("authentication", r)
+	if err != nil {
+		return fmt.Errorf("%w; validate GetWebauthnSession failed", err)
+	}
+
+	// TODO fix type inconsistency for UserID
+	u := database.User{ID: 0 /*sessionData.UserID*/} // 0 will fail to validate
+	_, err = s.webAuthn.ValidateLogin(&u, sessionData, nil)
+	return err
+}
+
+// GET /state
+func (s *Server) showState(w http.ResponseWriter, r *http.Request) {
+	if err := s.validate(w, r); err != nil {
+		logrus.WithError(err).Error("validate failed")
+		jsonResponse(w, err.Error(), http.StatusBadRequest)
+	}
+	_, _ = w.Write([]byte(`ok`))
+}
+
 // Start
 func (s *Server) Start() {
-	logrus.Info("starting server at", s.listenAddr)
+	logrus.Info("starting server at ", s.listenAddr)
 	logrus.Fatal(http.ListenAndServe(s.listenAddr, s.mux))
 }
 
@@ -288,6 +314,7 @@ func NewServer(addr string) (*Server, error) {
 	r.HandleFunc("/login/finish/{username}", s.finishLogin).Methods("POST")
 
 	r.HandleFunc("/logout", s.logout).Methods("GET")
+	r.HandleFunc("/state", s.showState).Methods("GET")
 
 	// to sign JWT bearer token - considering this could be the only authorization flow
 	s.jwtSvc, err = jwt.NewJWT("./TestCertificate.crt")
