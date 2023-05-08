@@ -5,6 +5,7 @@ This is a Demo to provide insight into a WebAuthn flow with FIDO2 being the sing
 Note that this example is based on Safari only, in May 2023. Passkeys from Chrome and other browsers cannot yet be stored in the iCloud keychain. This means that your WebAuthn auth using passkeys registered by a specific browser will be tied to that browser. 
 
 ## Caveats
+See [Passkey Notes](./PasskeyNotes.md) for more detail.
 
 ### HTTP(s) Only
 This demo does not use TLS so only a connection to http://localhost:8080 will be able to perform WebAuthn functions. I've only tested with Safari on a Mac.
@@ -50,3 +51,9 @@ Right now I'm unclear as to where JWT signing should occur in the webauthn flow 
 * https://github.com/Quiq/webauthn_proxy
 * https://developer.apple.com/forums/tags/passkeys-in-icloud-keychain/?page=2&sortBy=oldest
 * [Good podcast with transcript](https://podcast.macadmins.org/2023/02/27/episode-304-webauthn-and-webauthn-io/)
+* https://webauthn.io
+* https://passkeys.dev/docs/reference/macos/
+  * [the root](https://passkeys.dev)
+  * [WenAuthn Glossary](https://passkeys.dev/docs/reference/terms/)
+* [Matt Miller's WebAuthn blog](https://blog.millerti.me) 
+  * [Passkeys](https://simplewebauthn.dev/docs/advanced/passkeys) 
