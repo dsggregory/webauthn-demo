@@ -16,6 +16,13 @@ import (
 	"webauthn/pkg/session"
 )
 
+const (
+	// SessionAuthentication the authenticated session namespace
+	SessionAuthentication = "authentication"
+	// SessionDiscoverable the Autofill UI session namespace
+	SessionDiscoverable = "discoverable"
+)
+
 // Server the WebAuthn "Relying Party" implementation
 type Server struct {
 	href       string
@@ -171,7 +178,7 @@ func (s *Server) beginLogin(w http.ResponseWriter, r *http.Request) {
 	// Store session data as marshaled JSON.
 	// sessionData.Challenge is a JWT and looks like:
 	//  * `2kTSuleq0Xz0SFyqwO-kqfHbKIT2PAaGdDaW5E7e4kw`
-	err = s.sessionStore.SaveWebauthnSession("authentication", sessionData, r, w)
+	err = s.sessionStore.SaveWebauthnSession(SessionAuthentication, sessionData, r, w)
 	if err != nil {
 		l.WithError(err).Error("SaveWebauthnSession failed")
 		jsonResponse(w, err.Error(), http.StatusInternalServerError)
@@ -201,7 +208,7 @@ func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// load the session data
-	sessionData, err := s.sessionStore.GetWebauthnSession("authentication", r)
+	sessionData, err := s.sessionStore.GetWebauthnSession(SessionAuthentication, r)
 	if err != nil {
 		l.WithError(err).Error("GetWebauthnSession failed")
 		jsonResponse(w, err.Error(), http.StatusBadRequest)
@@ -226,13 +233,43 @@ func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, "Login Success", http.StatusOK)
 }
 
+func (s *Server) beginDiscoverableLogin(w http.ResponseWriter, r *http.Request) {
+	options, sessionData, err := s.webAuthn.BeginDiscoverableLogin()
+	if err != nil {
+		logrus.WithError(err).Error("BeginDiscoverableLogin failed")
+		jsonResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = s.sessionStore.SaveWebauthnSession(SessionDiscoverable, sessionData, r, w)
+	if err != nil {
+		logrus.WithError(err).Error("SaveWebauthnSession discoverable failed")
+		jsonResponse(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	jsonResponse(w, options, http.StatusOK)
+}
+
+func (s *Server) verifyDiscoverableLogin(w http.ResponseWriter, r *http.Request) {
+	// load the session data
+	sessionData, err := s.sessionStore.GetWebauthnSession(SessionDiscoverable, r)
+	if err != nil {
+		logrus.WithError(err).Error("GetWebauthnSession failed")
+		jsonResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	creds, err := s.webAuthn.ValidateDiscoverableLogin(nil, sessionData, r)
+}
+
 // GET /logout
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	logrus.Debug("Logout")
 
 	// TODO how do we know this is for the same user that's passed in?
 
-	if err := s.sessionStore.DeleteWebauthnSession("authentication", r, w); err != nil {
+	if err := s.sessionStore.DeleteWebauthnSession(SessionAuthentication, r, w); err != nil {
 		logrus.WithError(err).Error("DeleteWebauthnSession failed")
 		jsonResponse(w, err.Error(), http.StatusBadRequest)
 		return
@@ -244,7 +281,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 // test to figure out how client would validate a webauthn-session cookie outside of login flow
 func (s *Server) validate(w http.ResponseWriter, r *http.Request) error {
 	// load the session data from the `webauthn-session` cookie
-	sessionData, err := s.sessionStore.GetWebauthnSession("authentication", r)
+	sessionData, err := s.sessionStore.GetWebauthnSession(SessionAuthentication, r)
 	if err != nil {
 		return fmt.Errorf("%w; validate GetWebauthnSession failed", err)
 	}
@@ -312,6 +349,8 @@ func NewServer(addr string) (*Server, error) {
 	r.HandleFunc("/register/finish/{username}", s.finishRegistration).Methods("POST")
 	r.HandleFunc("/login/begin/{username}", s.beginLogin).Methods("GET")
 	r.HandleFunc("/login/finish/{username}", s.finishLogin).Methods("POST")
+	r.HandleFunc("/discoverable/begin", s.beginDiscoverableLogin).Methods("GET")
+	r.HandleFunc("/discoverable/finish", s.verifyDiscoverableLogin).Methods("POST")
 
 	r.HandleFunc("/logout", s.logout).Methods("GET")
 	r.HandleFunc("/state", s.showState).Methods("GET")

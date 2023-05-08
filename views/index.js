@@ -139,3 +139,51 @@ function loginUser() {
             alert("failed to register " + username)
         })
 }
+
+function getAuthenticationOptions() {
+    $.get('/discoverable/begin',
+        null,
+        function (data) {
+            return data
+        },
+        'json');
+}
+function verifyAutoFillResponse(resp) {
+    $.post('/discoverable/finish',
+        JSON.stringify(resp));
+}
+
+/* Autofill UI (e.g. discoverable credentials) for passkeys. Requires `autocomplete="username webauthn"` on text element.
+ */
+async function autofillUI() {
+    if (
+        typeof window.PublicKeyCredential !== 'undefined'
+        && typeof window.PublicKeyCredential.isConditionalMediationAvailable === 'function'
+    ) {
+        const available = await PublicKeyCredential.isConditionalMediationAvailable();
+
+        if (available) {
+            try {
+                // TODO: Retrieve authentication options for `navigator.credentials.get()`
+                // from your server.
+                const authOptions = await getAuthenticationOptions();
+                // This call to `navigator.credentials.get()` is "set and forget."
+                // The Promise will only resolve if the user successfully interacts
+                // with the browser's autofill UI to select a passkey.
+                const webAuthnResponse = await navigator.credentials.get({
+                    mediation: "conditional",
+                    publicKey: {
+                        ...authOptions,
+                        // see note about userVerification below
+                        userVerification: "preferred",
+                    }
+                });
+                // TODO Send the response to your server for verification and
+                // authenticate the user if the response is valid.
+                await verifyAutoFillResponse(webAuthnResponse);
+            } catch (err) {
+                console.error('Error with conditional UI:', err);
+            }
+        }
+    }
+}

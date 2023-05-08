@@ -12,7 +12,7 @@
 
 Username:
 <br>
-<input type="text" name="username" id="username" placeholder="i.e. foo@bar.com">
+<input type="text" name="username" id="username" autocomplete="username webauthn" placeholder="i.e. foo@bar.com">
 <br>
 <br>
 <button id="btnEnroll" onclick="registerUser()">Register</button>
@@ -27,6 +27,8 @@ Username:
             alert("Error: this browser does not support WebAuthn");
             return;
         }
+
+        autofillUI();
     });
 
 </script>
