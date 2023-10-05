@@ -1,0 +1,310 @@
+openapi: 3.0.3
+info:
+  title: THS API
+  description: Webauthn Demo
+  version: 1.0.0
+servers:
+  - url: https://localhost:8080
+paths:
+  /customer:
+    post:
+      tags:
+        - PrivilegedAccess
+      summary: create a customer
+      description: An admin endpoint to create a customer.
+      requestBody:
+        description: JSON of customer
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Customer'
+      responses:
+        '201':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          description: A WWW-Authenticate header is returned when the apiKey is invalid
+      security:
+        - sessionAuth: [ ]
+
+  /customer/{customer_id}:
+    delete:
+      tags:
+        - PrivilegedAccess
+      summary: Delete customer
+      description: An admin endpoint to a customer.
+      parameters:
+        - name: customer_id
+          in: path
+          description: ID of customer to delete
+          required: true
+          explode: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: successful operation
+        '404':
+          description: A WWW-Authenticate header is returned when the apiKey is invalid
+      security:
+        - sessionAuth: []
+  /contact:
+    post:
+      tags:
+        - PrivilegedAccess
+      summary: Create a user
+      description: An admin endpoint to create a user.
+      requestBody:
+        description: JSON of Contact
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Contact'
+      responses:
+        '201':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+        '404':
+          description: A WWW-Authenticate header is returned when the apiKey is invalid
+      security:
+        - sessionAuth: []
+  /contact/{contact_id}:
+    delete:
+      tags:
+        - PrivilegedAccess
+      summary: Delete a contact
+      description: An admin endpoint to delete a contact.
+      parameters:
+        - name: contact_id
+          in: path
+          description: ID of contact to delete
+          required: true
+          explode: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: successful operation
+        '404':
+          description: A WWW-Authenticate header is returned when the apiKey is invalid
+      security:
+        - sessionAuth: []
+  /contact/provision:
+    post:
+      tags:
+        - PrivilegedAccess
+      summary: Provision a contact
+      description: |
+        Onboard a new contact. This begin the user-registration ceremony where this response will be a URL to be delivered to the new user.
+        
+        The full ceremony looks like the following:
+        * an admin provisions a user with their email and customer affinity set to zero (all customers)
+        * after provisioning, the admin is presented with a special registration URL
+        * admin passes the registration URL with one-time ID to the new user. The URL contains the regid query param that must match user.RegistrationID
+        * user browses portal, enters his email address, and clicks register
+        * the browser asks user to create a passkey
+        * the server is called with the credential to complete registration and give the user access
+      parameters:
+        - name: username
+          in: query
+          description: The email of the new user
+          required: true
+          schema:
+            type: string
+        - name: contact_id
+          in: query
+          description: The primary contact ID of the new user. Contact ID of zero (0) makes the new user an <b>admin</b>!
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: success and a URL made available to present to the new user
+        '404':
+          description: unauthorized
+      security:
+        - sessionAuth: []
+  /apikey/{contact_id}:
+    put:
+      tags:
+        - PrivilegedAccess
+      summary: Create or rotate a Contacts API Key for CustomerAccess
+      description: An admin endpoint to generate a new API Key for a contact to use in CustomerAccess REST endpoints
+      parameters:
+        - name: contact_id
+          in: path
+          description: Contact to replace existing API Key
+          required: true
+          explode: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: successful operation
+        '404':
+          description: A WWW-Authenticate header is returned when the apiKey is invalid
+      security:
+        - sessionAuth: [ ]
+    delete:
+      tags:
+        - PrivilegedAccess
+      summary: Delete a Contacts API Key for CustomerAccess
+      description: An admin endpoint to revoke an API Key for a contact that is used in CustomerAccess REST endpoints
+      parameters:
+        - name: contact_id
+          in: path
+          description: Contact from which to delete the API Key
+          required: true
+          explode: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: successful operation
+        '404':
+          description: A WWW-Authenticate header is returned when the apiKey is invalid
+      security:
+        - sessionAuth: [ ]
+  /nist-links:
+    put:
+      tags:
+        - PrivilegedAccess
+      summary: Make new NIST release available
+      description: |-
+        As an administrator has determined from the NIST website (https://www.nist.gov/itl/ssd/software-quality-group/national-software-reference-library-nsrl/nsrl-download/current-rds) that a new list is available in full or one of the quarterly deltas. The link to the NIST site to download the artifact is presented to this endpoint which places the link onto a queue. The queue is later processed by the nist_loader application and new NIST data is made available for future surveys.
+        NIST releases the full data set in the first quarter of the year and delta data sets every other quarter.
+      requestBody:
+        description: JSON array of NIST URLs
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: string
+                description: A NIST URL that acquires one of the most recent database or deltas
+      responses:
+        '201':
+          description: Created
+        '404':
+          description: A WWW-Authenticate header is returned when the apiKey is invalid
+      security:
+        - sessionAuth: [ ]
+  /public/:
+    get:
+      tags:
+        - PrivilegedAccess
+      summary: Proxy CISA Taxii requests
+      description: Since the Taxii servers whitelist consumers, this proxies Taxii requests from the whitelisted server in the backend.
+      responses:
+        '200':
+          description: This and any other response sent from the Taxii server
+      security:
+        - sessionAuth: [ ]
+  /health/:
+    get:
+      tags:
+        - unprivileged
+      summary: Is the app healthy
+      description: Any endpoint beneath /health/ responds with a 200 and logs the entire route. So, you can define a readiness probe to call /health/readiness and a liveness probe to call /health/liveness to see in the log how the container environment checks health.
+      responses:
+        '200':
+          description: App is indeed healthy
+components:
+  schemas:
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 100000
+        name:
+          type: string
+          example: ACME Corp.
+        created:
+          type: string
+          example: 2014-02-04 00:00:00
+      xml:
+        name: customer
+    Contact:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 100000
+        customer_id:
+          type: integer
+          format: int64
+          example: 100000
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          example: john@email.com
+        created:
+          type: string
+          example: 2014-02-04 00:00:00
+      xml:
+        name: customer
+    Analysis:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 100000
+        customer_id:
+          type: integer
+          format: int64
+          example: 100000
+        created:
+          type: string
+          example: 2014-02-04 00:00:00
+        node:
+          type: string
+          example: node1.domain.com
+          description: The hostname that was surveyed
+        results:
+          type: string
+          description: The JSON analysis results of the host surveyed
+    Survey:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 100000
+        customer_id:
+          type: integer
+          format: int64
+          example: 100000
+        created:
+          type: string
+          example: 2014-02-04 00:00:00
+        node:
+          type: string
+          example: node1.domain.com
+          description: The hostname that was surveyed
+        results:
+          type: string
+          description: The JSON survey results of the host
+  securitySchemes:
+    api_key:
+      type: apiKey
+      name: X-API-KEY
+      in: header
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: webauthn-session  # cookie name

@@ -1,0 +1,61 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>THS Portal</title>
+    <link rel="stylesheet" type="text/css" href="/styles/index.css">
+    <script src="https://unpkg.com/htmx.org@1.9.6"
+            integrity="sha384-FhXw7b6AlE/jyjlZH5iHa/tTe9EpJ1Y55RjcgPbjeWMskSxZt1v9qkxLJWNJaGni"
+            crossorigin="anonymous"></script>
+</head>
+
+<body>
+
+{{template "header.gohtml"}}
+
+Main app here.
+
+<div class="hero">
+    <div class="container">
+        <div class="row">
+            <div class="main-content col-md-12">
+                <div class="row">
+                    <div class="hero-left order-2 col-lg-9 order-lg-1">
+                        <h3>Provision New User</h3>
+
+
+                        <div class="mt-5 hero-form" id="hero-form" x-data="global">
+                            <section class="form-group"  hx-target="this" hx-swap="outerHTML">
+                                <form hx-post="/contact/provision">
+                                    <div class="form-row">
+                                        <div class="col-sm-12 mb-3">
+                                            <input type="text" class="form-control form-control-lg" id="username"
+                                                   name="username" placeholder="Email" x-model="username">
+                                        </div>
+                                        <div class="col-sm-3 mb-3">
+                                            <input type="text" class="form-control form-control-lg" id="customer_id"
+                                                   name="customer_id" placeholder="CustomerID">
+                                        </div>
+                                        <div class="col-sm-12">
+                                            <div class="alert.alertClass alert-danger" id="error"></div>
+                                        </div>
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="col-sm-4 mb-3">
+                                            <button class="btn btn-block btn-primary btn-default" type="submit"
+                                                    id="provision-button">
+                                                Provision
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

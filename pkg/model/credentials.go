@@ -1,4 +1,4 @@
-package database
+package model
 
 import (
 	"database/sql/driver"
@@ -20,13 +20,21 @@ func (c ColumnCredentials) Value() (driver.Value, error) {
 
 // Scan when the DB driver reads from the DB
 func (c *ColumnCredentials) Scan(value interface{}) error {
-	b, ok := value.([]byte)
-	if !ok {
+	var b []byte
+	switch x := value.(type) {
+	case []byte:
+		b = x
+	case string:
+		b = []byte(x)
+	default:
 		return fmt.Errorf("CredentialColumn value is not []byte")
 	}
-	creds := []webauthn.Credential{}
-	err := json.Unmarshal(b, &creds)
-	*c = creds
+	var err error
+	if len(b) > 0 {
+		creds := []webauthn.Credential{}
+		err = json.Unmarshal(b, &creds)
+		*c = creds
+	}
 
 	return err
 }

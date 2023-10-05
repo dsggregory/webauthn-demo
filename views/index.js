@@ -1,15 +1,31 @@
+let regid = undefined
+
+function checkUserRegistrationCeremony() {
+    // the regid is generated when a user is provisioned by another admin user and is only intended for registering an admin user
+    const urlParams = new URLSearchParams(window.location.search);
+    const qp = urlParams.get('regid');
+    if (qp !== null) {
+        regid = qp
+    }
+}
+
 function registerUser() {
 
     username = $("#username").val()
     if (username === "") {
-        alert("please enter a username");
+        var elem = document.getElementById("error");
+        elem.textContent = "please enter a username";
         return;
     }
 
     let state = "register.begin";
 
+    let query = ""
+    if (regid !== undefined) {
+        query="?regid=" + regid
+    }
     $.get(
-        '/register/begin/' + username,
+        '/register/begin/' + username + query,
         null,
         function (data) {
             return data
@@ -55,15 +71,18 @@ function registerUser() {
                 'json')
                 .fail(function (response) {
                     console.log(response.responseText);
-                    alert("error: " + response.responseText);
+                    var elem = document.getElementById("error")
+                    elem.textContent = response.responseText;
                 })
                 .then((success) => {
-                    alert("successfully registered " + username + "!")
+                    var elem = document.getElementById("error")
+                    elem.textContent = "Successfully registered " + username + "! You may now login."
                 })
         })
         .catch((error) => {
-            console.log(error)
-            alert("failed to register " + username + " state: " + state + " Error: " + error)
+            console.log(error);
+            var elem = document.getElementById("error");
+            elem.textContent = "failed to register " + username + " state: " + state + " Error: " + error.responseText;
         })
 }
 
@@ -84,7 +103,8 @@ function loginUser() {
 
     username = $("#username").val()
     if (username === "") {
-        alert("please enter a username");
+        var elem = document.getElementById("error")
+        elem.textContent = "please enter a username";
         return;
     }
 
@@ -126,16 +146,114 @@ function loginUser() {
                     },
                 }),
                 function (data) {
+                    // data is response body, not the response itself
                     return data
                 },
                 'json')
-        })
-        .then((success) => {
-            alert("successfully logged in " + username + "!")
-            return
+                .then((success) => {
+                    //alert("successfully logged in " + username + "!")
+                    window.location = "/dashboard";
+                })
+                .catch((error) => {
+                    console.log(error)
+                    var elem = document.getElementById("error")
+                    elem.textContent = "login failed " + username
+                })
         })
         .catch((error) => {
             console.log(error)
-            alert("failed to register " + username)
+            var elem = document.getElementById("error")
+            elem.textContent = "login failed " + username
         })
+}
+
+function getAuthenticationOptions() {
+    let p, resp
+    try {
+        p = $.get('/discoverable/begin',
+        null,
+        function (data) {
+            resp = data
+            return resp
+        },
+        'json')
+        .then((success) => {
+            let credentialCreationOptions = resp
+            credentialCreationOptions.publicKey.challenge = bufferDecode(credentialCreationOptions.publicKey.challenge);
+            return credentialCreationOptions.publicKey
+        })
+        .catch((error) => {
+            console.log("getAuthenticationOptions: " + error)
+        })
+    } catch (e) {
+        console.log("discover begin error")
+    }
+    return p
+}
+function verifyAutoFillResponse(resp) {
+    let credAssertion;
+    credAssertion = $.extend(credAssertion, resp);
+    let js = JSON.stringify({
+        authenticatorAttachment: credAssertion.authenticatorAttachment,
+        id: credAssertion.id,
+        rawId: bufferEncode(credAssertion.rawId),
+        type: credAssertion.type,
+        response: credAssertion.response,
+        response: {
+            authenticatorData: bufferEncode(credAssertion.response.authenticatorData),
+            clientDataJSON: bufferEncode(credAssertion.response.clientDataJSON),
+            signature: bufferEncode(credAssertion.response.signature),
+            userHandle: bufferEncode(credAssertion.response.userHandle),
+        },
+    });
+    return $.post('/discoverable/finish',
+        js,
+        function (data) {
+            return data
+        },
+        'json')
+        .then((success) => {
+            return
+        })
+        .fail(function (response) {
+            console.log(response.responseText);
+            var elem = document.getElementById("error")
+            elem.textContent = response.responseText;
+        });
+}
+
+/* Autofill UI (e.g. discoverable credentials) for passkeys. Requires `autocomplete="username webauthn"` on text element.
+ */
+async function autofillUI() {
+    if (
+        typeof window.PublicKeyCredential !== 'undefined'
+        && typeof window.PublicKeyCredential.isConditionalMediationAvailable === 'function'
+    ) {
+        const available = await PublicKeyCredential.isConditionalMediationAvailable();
+
+        if (available) {
+            try {
+                // TODO: Retrieve authentication options for `navigator.credentials.get()`
+                // from your server.
+                const authOptions = await getAuthenticationOptions();
+                // This call to `navigator.credentials.get()` is "set and forget."
+                // The Promise will only resolve if the user successfully interacts
+                // with the browser's autofill UI to select a passkey.
+                const webAuthnResponse = await navigator.credentials.get({
+                    mediation: "conditional",
+                    publicKey: {
+                        ...authOptions,
+                        // see note about userVerification below
+                        userVerification: "preferred",
+                    }
+                });
+                // TODO Send the response to your server for verification and
+                // authenticate the user if the response is valid.
+                await verifyAutoFillResponse(webAuthnResponse);
+                window.location = "/dashboard";
+            } catch (err) {
+                console.error('Error with conditional UI:', err);
+            }
+        }
+    }
 }

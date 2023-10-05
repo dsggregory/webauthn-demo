@@ -1,4 +1,4 @@
-package session
+package webauthn
 
 import (
 	"crypto/rand"
@@ -59,6 +59,7 @@ func NewStore(keyPairs ...[]byte) (*Store, error) {
 	store := &Store{
 		sessions.NewCookieStore(keyPairs...),
 	}
+
 	return store, nil
 }
 
@@ -123,6 +124,7 @@ func (store *Store) Set(key string, value interface{}, r *http.Request, w http.R
 		log.Printf("Error getting session %s", err)
 		// don't return err
 	}
+
 	session.Values[key] = value
 	err = session.Save(r, w)
 	return err

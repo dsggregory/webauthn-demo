@@ -2,6 +2,8 @@
 
 This is a Demo to provide insight into a WebAuthn flow with FIDO2 being the single step (factor) authenticator.
 
+This is a drop-in template for your next project to get you started.
+
 Note that this example is based on Safari only, in May 2023. Passkeys from Chrome and other browsers cannot yet be stored in the iCloud keychain. This means that your WebAuthn auth using passkeys registered by a specific browser will be tied to that browser. 
 
 ## Caveats
@@ -11,6 +13,21 @@ See [Passkey Notes](./PasskeyNotes.md) for more detail.
 This demo does not use TLS so only a connection to http://localhost:8080 will be able to perform WebAuthn functions. I've only tested with Safari on a Mac.
 
 ## Demo Walk Through
+### Run it
+
+Export these environment variables.
+```shell
+LISTEN_ADDR=localhost:8080
+DB_SERVICE_URL=file:///tmp/webauthn-demo.db
+WEBSITE_URL=http://localhost:8080
+```
+
+Run with:
+```shell
+go run main.go
+```
+
+Then browse to http://localhost:8080.
 ### Registration
 The [javascript](./views/index.js) communicates with the Safari browser to provide a series of dialogs that collect information about which security device will be used to authenticate this user in the future.  
 
