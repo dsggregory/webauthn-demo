@@ -63,6 +63,8 @@ type WebauthnConfig struct {
 	// RPDisplayName relying party's display name for your site
 	RPDisplayName string
 	// RPID relying party's ID. Generally the domain name (not hostname) for your site.
+	// WebAuthn requires this to be a DNS-registered domain that is used to access the website.
+	// When it doesn't match, users will not be able to register or login.
 	RPID string
 	// RPOrigins relying party's possible origins. Optional other origin URLs allowed for WebAuthn requests.
 	RPOrigins []string
