@@ -82,7 +82,7 @@ function registerUser() {
         .catch((error) => {
             console.log(error);
             var elem = document.getElementById("error");
-            elem.textContent = "failed to register " + username + " state: " + state + " Error: " + error.responseText;
+            elem.textContent = "failed to register " + username + " state: " + state + " Error: " + error;
         })
 }
 
