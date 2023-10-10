@@ -13,8 +13,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"thsapi/pkg/db"
-	"thsapi/pkg/model"
+	"webauthndemo/pkg/db"
+	"webauthndemo/pkg/model"
 
 	. "github.com/smartystreets/goconvey/convey"
 )

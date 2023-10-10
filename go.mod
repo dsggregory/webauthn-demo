@@ -3,6 +3,7 @@ module webauthndemo
 go 1.20
 
 require (
+	github.com/descope/virtualwebauthn v1.0.2
 	github.com/dsggregory/config v0.1.0
 	github.com/go-webauthn/webauthn v0.8.6
 	github.com/gorilla/mux v1.8.0

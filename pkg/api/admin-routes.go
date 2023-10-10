@@ -173,6 +173,10 @@ func (s *Server) adminDeleteCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) contactRegistryLink(contact *model.Contact) string {
+	return fmt.Sprintf("%s/signin?regid=%s&username=%s", s.cfg.WebsiteURL, url.QueryEscape(contact.RegistrationID), url.QueryEscape(contact.Email))
+}
+
 func (s *Server) adminProvisionContact(w http.ResponseWriter, r *http.Request) {
 	var values url.Values
 	defaultAccept := CtHtml
@@ -222,7 +226,7 @@ func (s *Server) adminProvisionContact(w http.ResponseWriter, r *http.Request) {
 		RegistrationID: regID,
 		APIKey:         apikey,
 	}
-	if err := s.db.CreateContact(&contact); err != nil {
+	if _, err := s.db.CreateContact(&contact); err != nil {
 		RespondError(w, http.StatusInternalServerError, err)
 	}
 
@@ -234,7 +238,6 @@ func (s *Server) adminProvisionContact(w http.ResponseWriter, r *http.Request) {
 	case CtHtml, CtAny:
 		ru := fmt.Sprintf("/signin?username=%s&regid=%s", contact.Email, contact.RegistrationID)
 		_ = s.renderTemplate(w, "userCreated.gohtml", ru)
-		//http.Redirect(w, r, ru, http.StatusTemporaryRedirect)
 	}
 }
 
@@ -247,7 +250,7 @@ func (s *Server) adminCreateContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c.ID = 0
-	if err := s.db.CreateContact(&c); err != nil {
+	if _, err := s.db.CreateContact(&c); err != nil {
 		RespondError(w, http.StatusInternalServerError, err)
 	}
 
@@ -280,15 +283,63 @@ func (s *Server) adminDeleteContact(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) addAdminRoutes() {
+// uiAdminInviteContact highly tuned to what contacts.gohtml requests. Response tailored to whether an invite exists or had to be created.
+func (s *Server) uiAdminInviteContact(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	cid, ok := vars["contact_id"]
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	contact_id, err := strconv.Atoi(cid)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	contact, err := s.db.GetContact(uint(contact_id))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if contact.RegistrationID == "" {
+		// create a new invite
+		contact, err = s.db.InviteContactAPIKey(uint(contact_id))
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	accept := NegotiateContentType(r, []string{CtAny, CtJson, CtHtml}, CtHtml)
+	switch accept {
+	case CtJson:
+		w.Header().Set("Content-Type", "application/json")
+		body, _ := json.Marshal(contact)
+		_, _ = w.Write(body)
+	case CtHtml, CtAny:
+		ru := struct {
+			Contact *model.Contact
+			Link    string
+		}{
+			Contact: contact,
+			Link:    s.contactRegistryLink(contact),
+		}
+		_ = s.renderTemplate(w, "invite.gohtml", &ru)
+	}
+}
+
+func (s *Server) addAdminRoutes(l mux.MiddlewareFunc) {
 	// admin routes require webauthn session cookie
 	var authWrap func(next http.Handler) http.HandlerFunc = s.adminLoginRequired
 
-	s.mux.Handle(AdminAPIPrefix+"/apikey/{contact_id}", authWrap(http.HandlerFunc(s.adminAPIKey))).Methods(http.MethodDelete, http.MethodPut)
-	s.mux.Handle(AdminAPIPrefix+"/customer", authWrap(http.HandlerFunc(s.adminCreateCustomer))).Methods(http.MethodPost)
-	s.mux.Handle(AdminAPIPrefix+"/customer/{customer_id}", authWrap(http.HandlerFunc(s.adminDeleteCustomer))).Methods(http.MethodDelete)
-	s.mux.Handle(AdminAPIPrefix+"/contact", authWrap(http.HandlerFunc(s.adminCreateContact))).Methods(http.MethodPost)
-	s.mux.Handle(AdminAPIPrefix+"/contact/{contact_id}", authWrap(http.HandlerFunc(s.adminDeleteContact))).Methods(http.MethodDelete)
-	s.mux.Handle(AdminAPIPrefix+"/contact/provision", authWrap(http.HandlerFunc(s.adminProvisionContact))).Methods(http.MethodPost)
-	// Also, the CISA Taxii proxy is wrapped in auth and added from s.newRouter()
+	s.mux.Handle(AdminAPIPrefix+"/apikey/{contact_id}", l(authWrap(http.HandlerFunc(s.adminAPIKey)))).Methods(http.MethodDelete, http.MethodPut)
+	s.mux.Handle(AdminAPIPrefix+"/customer", l(authWrap(http.HandlerFunc(s.adminCreateCustomer)))).Methods(http.MethodPost)
+	s.mux.Handle(AdminAPIPrefix+"/customer/{customer_id}", l(authWrap(http.HandlerFunc(s.adminDeleteCustomer)))).Methods(http.MethodDelete)
+	s.mux.Handle(AdminAPIPrefix+"/contact", l(authWrap(http.HandlerFunc(s.adminCreateContact)))).Methods(http.MethodPost)
+	s.mux.Handle(AdminAPIPrefix+"/contact/{contact_id}", l(authWrap(http.HandlerFunc(s.adminDeleteContact)))).Methods(http.MethodDelete)
+	s.mux.Handle(AdminAPIPrefix+"/contact/provision", l(authWrap(http.HandlerFunc(s.adminProvisionContact)))).Methods(http.MethodPost)
+	s.mux.Handle(AdminAPIPrefix+"/contact/{contact_id}/inviteUI", l(authWrap(http.HandlerFunc(s.uiAdminInviteContact)))).Methods(http.MethodGet)
+	s.mux.Handle(AdminAPIPrefix+"/contact/provision", l(authWrap(http.HandlerFunc(s.adminProvisionContact)))).Methods(http.MethodPost)
 }

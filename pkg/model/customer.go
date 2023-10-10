@@ -78,3 +78,9 @@ func (u Contact) CredentialExcludeList() []protocol.CredentialDescriptor {
 
 	return credentialExcludeList
 }
+
+// ContactCompany for use in joins
+type ContactCompany struct {
+	Contact
+	CustomerName string
+}

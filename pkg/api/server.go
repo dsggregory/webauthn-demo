@@ -17,12 +17,13 @@ import (
 type Server struct {
 	cfg *config.AppSettings
 	// mux we use gorilla mux so we can handle query path parsing
-	mux        *mux.Router
-	svr        *http.Server
-	templates  *template.Template
-	wg         *sync.WaitGroup
-	db         *db.DBService
-	webautnSvc *webauthnapi.Server
+	mux           *mux.Router
+	svr           *http.Server
+	templates     *template.Template
+	wg            *sync.WaitGroup
+	db            *db.DBService
+	webautnSvc    *webauthnapi.Server
+	logMiddleware mux.MiddlewareFunc
 }
 
 func (s *Server) SetSvr(svr *http.Server) {
@@ -93,8 +94,10 @@ func (s *Server) StartServer(errc chan<- error) {
 }
 
 func (s *Server) newRouter() error {
+	var l func(next http.Handler) http.Handler = s.logMiddleware
+
 	s.addHealthRoutes()
-	s.addAdminRoutes()
+	s.addAdminRoutes(l)
 
 	s.mux.HandleFunc("/signin", s.authenticate).Methods("GET") // the login page
 	s.mux.HandleFunc("/logout", s.logout).Methods("GET")
@@ -110,9 +113,10 @@ func (s *Server) newRouter() error {
 // NewServer creates an instance of the API. See StartServer().
 func NewServer(cfg *config.AppSettings, db *db.DBService) (*Server, error) {
 	s := &Server{
-		cfg: cfg,
-		db:  db,
-		mux: mux.NewRouter(),
+		cfg:           cfg,
+		db:            db,
+		mux:           mux.NewRouter(),
+		logMiddleware: NewLoggingMiddleware,
 	}
 	_ = s.LoadTemplates()
 

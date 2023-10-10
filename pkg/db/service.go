@@ -63,6 +63,14 @@ func (s *DBService) DeleteCustomer(cid uint) error {
 	return tx.Commit().Error
 }
 
+func (s *DBService) GetAllCustomers() ([]model.Customer, error) {
+	var custs []model.Customer
+
+	res := s.db.Find(&custs)
+
+	return custs, res.Error
+}
+
 func (s *DBService) CustomerByAPIKey(apiKey string) *model.Customer {
 	var c model.Customer
 	// select customers.* from contacts join customers on customers.id = contacts.customer_id and contacts.api_key = 'deadbeef';
@@ -89,26 +97,26 @@ func (s *DBService) GetCustomer(id uint) (*model.Customer, error) {
 }
 
 // CreateContact creates the contact 'c' and fills the created record in 'c'
-func (s *DBService) CreateContact(c *model.Contact) error {
+func (s *DBService) CreateContact(c *model.Contact) (*model.Contact, error) {
 	tx := s.db.Begin()
 	if err := tx.Create(&c).Error; err != nil {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
 
 	if c.ID == 0 {
 		if err := tx.Where(c.ID).Find(&c).Error; err != nil {
 			tx.Rollback()
-			return err
+			return nil, err
 		}
 	}
 
 	if err := tx.Where("id=?", c.ID).Find(c).Error; err != nil {
 		tx.Rollback()
-		return err
+		return nil, err
 	}
 
-	return tx.Commit().Error
+	return c, tx.Commit().Error
 }
 
 // NewUser begins a new webauthn user
@@ -125,10 +133,6 @@ func (s *DBService) PutUserCredentials(contact *model.Contact) error {
 func (s *DBService) DeleteContact(cid uint) error {
 	c := model.Contact{}
 	tx := s.db.Begin()
-	if err := tx.Create(&c).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
 
 	c.ID = cid
 	if c.ID != 0 {
@@ -139,6 +143,14 @@ func (s *DBService) DeleteContact(cid uint) error {
 	}
 
 	return tx.Commit().Error
+}
+
+func (s *DBService) GetAllContacts() ([]model.ContactCompany, error) {
+	var conts []model.ContactCompany
+
+	err := s.db.Raw("select t1.*, t2.name as customer_name from contacts t1 left outer join customers t2 on t2.id = t1.customer_id ORdER BY full_name ASC").Find(&conts).Error
+
+	return conts, err
 }
 
 func (s *DBService) GetContact(id uint) (*model.Contact, error) {
@@ -204,10 +216,6 @@ func (s *DBService) UpdateContact(c *model.Contact) error {
 		tx.Rollback()
 		return err
 	}
-	if txwhere.RowsAffected != 1 {
-		tx.Rollback()
-		return gorm.ErrRecordNotFound
-	}
 	if err := txwhere.Find(c).Error; err != nil {
 		tx.Rollback()
 		return err
@@ -216,6 +224,7 @@ func (s *DBService) UpdateContact(c *model.Contact) error {
 	return tx.Commit().Error
 }
 
+// GenerateAPIKey create a random hex-encoded string of length or 32 if length<0
 func (s *DBService) GenerateAPIKey(length int) (string, error) {
 	if length < 0 {
 		length = 32
@@ -284,6 +293,35 @@ func (s *DBService) RevokeContactAPIKey(contact_id uint) error {
 	return tx.Commit().Error
 }
 
+func (s *DBService) InviteContactAPIKey(contact_id uint) (*model.Contact, error) {
+	contact, err := s.GetContact(contact_id)
+	if contact == nil {
+		if err == nil {
+			return nil, gorm.ErrRecordNotFound
+		} else {
+			return nil, err
+		}
+	}
+
+	contact.RegistrationID, err = s.GenerateAPIKey(-1)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := s.db.Begin()
+	txwhere := tx.Where("id=?", contact_id)
+	if err := txwhere.Save(contact).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+	if err := txwhere.Find(contact).Error; err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	return contact, tx.Commit().Error
+}
+
 func NewDBService(dsn string) (*DBService, error) {
 	dbg := logrus.GetLevel() == logrus.DebugLevel
 	db, err := New(dsn, dbg)
@@ -291,7 +329,7 @@ func NewDBService(dsn string) (*DBService, error) {
 		return nil, err
 	}
 	if err = AutoMigrate(db); err != nil {
-		logrus.WithError(err).Warn("cannot auto migrate DB")
+		return nil, fmt.Errorf("%w; cannot auto migrate DB", err)
 	}
 
 	return &DBService{db: db}, nil

@@ -5,6 +5,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/denisenkom/go-mssqldb v0.0.0-20191124224453-732737034ffd h1:83Wprp6ROGeiHFAP8WJdI2RoxALQYgdllERc3N5N2DM=
 github.com/denisenkom/go-mssqldb v0.0.0-20191124224453-732737034ffd/go.mod h1:xbL0rPBG9cCiLr28tMa8zpbdarY27NDyej4t/EjAShU=
+github.com/descope/virtualwebauthn v1.0.2 h1:cAvfS9wHh6On9HAE4Gjn3fJkf8MPQW2LzN8BPKEPs0M=
+github.com/descope/virtualwebauthn v1.0.2/go.mod h1:iJvinjD1iZYqQ09J5lF0+795OdDbzTWcYQjPD/BF54M=
 github.com/dsggregory/config v0.1.0 h1:V0pFcwGfQmZIboK4OqW8TO/eWScRPLoEi7/FtAoYke0=
 github.com/dsggregory/config v0.1.0/go.mod h1:vt0apCZs59CpP0ZqmDyIBAKT2J2xcd/h/5Q1VawSy9c=
 github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5 h1:Yzb9+7DPaBjB8zlTR87/ElzFsnQfuHnVUVqpZZIcV5Y=

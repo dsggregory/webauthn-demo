@@ -67,7 +67,8 @@ type WebauthnConfig struct {
 	// When it doesn't match, users will not be able to register or login.
 	RPID string
 	// RPOrigins relying party's possible origins. Optional other origin URLs allowed for WebAuthn requests.
-	RPOrigins []string
+	RPOrigins     []string
+	LogMiddleware mux.MiddlewareFunc
 }
 
 func jsonResponse(w http.ResponseWriter, d interface{}, c int) {
@@ -78,8 +79,6 @@ func jsonResponse(w http.ResponseWriter, d interface{}, c int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(c)
 	_, _ = w.Write(dj)
-
-	logrus.WithField("httpStatusCode", c).Debug(string(dj))
 }
 
 // the browser javascript calls this after the user presses the `Register` button and selects a passkey (iCloud, Yubikey, et.al.).
@@ -100,14 +99,16 @@ func (s *Server) beginRegistration(w http.ResponseWriter, r *http.Request) {
 	// get user
 	user, err := s.userDB.GetContactByEmail(username)
 	// If no users currently exist, we will allow the first to be auto-registered
+	allowWithoutInvite := false
 	if err != nil || user == nil {
 		fc, err := s.userDB.GetFirstContact()
 		if s.allowAutoregister && fc == nil && err != nil { // allow as we have no contacts yet
 			l.Info("auto-registering FIRST contact in DB")
+			allowWithoutInvite = true
 			displayName := strings.Split(username, "@")[0]
 
 			user = s.userDB.NewUser(username, displayName)
-			if err := s.userDB.CreateContact(user); err != nil {
+			if _, err := s.userDB.CreateContact(user); err != nil {
 				jsonResponse(w, fmt.Errorf(err.Error()), http.StatusBadRequest)
 				return
 			}
@@ -118,13 +119,21 @@ func (s *Server) beginRegistration(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Cannot register without an invite. The initial invite is by another admin, subsequent invites are made
+	// by the user so they may register passkeys from other devices.
+	if user.RegistrationID == "" && !allowWithoutInvite {
+		jsonResponse(w, fmt.Errorf("no pending invite"), http.StatusForbidden)
+		return
+	}
+
 	// handle this part of the registration ceremony
 	registrationID := r.URL.Query().Get("regid") // can register a credential
 	if registrationID != user.RegistrationID {
+		err = fmt.Errorf("registration denied due to registrationID mismatch")
 		l.WithError(err).WithFields(logrus.Fields{
 			"regid":      registrationID,
 			"expectedID": user.RegistrationID,
-		}).Error("registration denied due to registrationID mismatch")
+		}).Error("registration failed")
 		jsonResponse(w, err.Error(), http.StatusForbidden)
 		return
 	}
@@ -139,7 +148,6 @@ func (s *Server) beginRegistration(w http.ResponseWriter, r *http.Request) {
 		user,
 		registerOptions,
 	)
-
 	if err != nil {
 		l.WithError(err).Error("BeginRegistration failed")
 		jsonResponse(w, err.Error(), http.StatusInternalServerError)
@@ -357,6 +365,16 @@ func (s *Server) verifyDiscoverableLogin(w http.ResponseWriter, r *http.Request)
 	}
 	_ = cred
 
+	// At this point, we've confirmed the correct authenticator has been
+	// provided and it passed the challenge we gave it. We now need to make
+	// sure that the sign counter is higher than what we have stored to help
+	// give assurance that this credential wasn't cloned.
+	if cred.Authenticator.CloneWarning {
+		logrus.WithError(err).Errorf("credential appears to be cloned")
+		jsonResponse(w, "credential cloned", http.StatusForbidden)
+		return
+	}
+
 	// credentials validated - log the user in. Note: caller (e.g. javascript) needs to redirect to dashboard
 	err = s.sessionStore.Set(SessionUserID, validatedContact.ID, r, w)
 	if err != nil {
@@ -365,7 +383,7 @@ func (s *Server) verifyDiscoverableLogin(w http.ResponseWriter, r *http.Request)
 	}
 
 	if validatedContact != nil {
-		logrus.WithField("contact", validatedContact.FullName).Info("verifyDiscoverableLogin success, signing in")
+		logrus.WithField("user", validatedContact.Email).Info("verifyDiscoverableLogin success, signing in")
 	}
 	jsonResponse(w, "OK", http.StatusOK) // must be a json response
 }
@@ -399,13 +417,23 @@ func (s *Server) GetSessionUser(w http.ResponseWriter, r *http.Request) *model.C
 }
 
 func (s *Server) addRoutes(cfg *WebauthnConfig) error {
+	var l func(next http.Handler) http.Handler = s.cfg.LogMiddleware
+
+	if l == nil {
+		// noop effectively
+		l = func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				next.ServeHTTP(w, r)
+			})
+		}
+	}
 	// webauthn endpoints
-	s.mux.HandleFunc("/register/begin/{username}", s.beginRegistration).Methods("GET")
-	s.mux.HandleFunc("/register/finish/{username}", s.finishRegistration).Methods("POST")
-	s.mux.HandleFunc("/login/begin/{username}", s.beginLogin).Methods("GET")
-	s.mux.HandleFunc("/login/finish/{username}", s.finishLogin).Methods("POST")
-	s.mux.HandleFunc("/discoverable/begin", s.beginDiscoverableLogin).Methods("GET")
-	s.mux.HandleFunc("/discoverable/finish", s.verifyDiscoverableLogin).Methods("POST")
+	s.mux.Handle("/register/begin/{username}", l(http.HandlerFunc(s.beginRegistration))).Methods("GET")
+	s.mux.Handle("/register/finish/{username}", l(http.HandlerFunc(s.finishRegistration))).Methods("POST")
+	s.mux.Handle("/login/begin/{username}", l(http.HandlerFunc(s.beginLogin))).Methods("GET")
+	s.mux.Handle("/login/finish/{username}", l(http.HandlerFunc(s.finishLogin))).Methods("POST")
+	s.mux.Handle("/discoverable/begin", l(http.HandlerFunc(s.beginDiscoverableLogin))).Methods("GET")
+	s.mux.Handle("/discoverable/finish", l(http.HandlerFunc(s.verifyDiscoverableLogin))).Methods("POST")
 
 	return nil
 }
