@@ -1,0 +1,31 @@
+.wrapper {
+    display: flex;
+    width: 100%;
+    align-items: stretch;
+}
+
+#sidebar {
+    min-width: 250px;
+    max-width: 250px;
+}
+
+#sidebar.active {
+    margin-left: -250px;
+}
+
+body {
+    background-image: linear-gradient(to right, #fffbd5, #ada7a8);
+}
+
+.fa-info {
+    color: #34ce57!important;
+    background-color: #34ce57!important;
+}
+
+.longtext {
+    width: 100%;
+    table-layout: fixed;
+    display: table-cell;
+    vertical-align: middle;
+    word-wrap: break-word;
+}

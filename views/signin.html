@@ -4,13 +4,18 @@
 <head>
     <meta charset="utf-8">
     <title>Webauthn Demo Auth</title>
-    <link rel="stylesheet" type="text/css" href="/styles/index.css">
+    <link rel="stylesheet" type="text/css" href="/styles/style.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+            crossorigin="anonymous"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
     <script src="index.js"></script>
     <script>
-        $(document).ready(function(){
-            $('#username').keypress(function(e){
-                if(e.keyCode==13)
+        $(document).ready(function () {
+            $('#username').keypress(function (e) {
+                if (e.keyCode == 13)
                     $('#login-button').click();
             });
 
@@ -21,57 +26,57 @@
 
 <body>
 
-<div class="main-content col-sm-2">
-    <img src="/images/logo.png">
-</div>
+<nav class="navbar navbar-light">
+    <div class="container-fluid">
+        <img src="/images/logo.png">
+    </div>
+</nav>
 
 <div class="hero">
-<div class="container">
-    <div class="row">
-        <div class="main-content col-md-12">
-            <div class="row">
-                <div class="hero-left order-2 col-lg-9 order-lg-1">
-                    <h2>Webauthn Demo</h2>
-                    <h5>Login with your WebAuthn Passkey to continue.</h5>
+    <div class="container w-50">
+        <div class="row">
+            <div class="main-content col-md-12">
+                <div class="row">
+                    <div class="hero-left order-2 col-lg-9 order-lg-1">
+                        <h2>Webauthn Demo</h2>
+                        <h5>Login with your WebAuthn Passkey to continue.</h5>
 
 
-                    <div class="mt-5 hero-form" x-data="global">
+                        <div class="mt-5 hero-form" x-data="global">
                             <section class="form-group">
-                                    <div class="form-row">
-                                        <div class="col-sm-12 mb-3">
-                                            <input type="text" class="form-control form-control-lg" id="username" placeholder="Email" x-model="username" autocomplete="username webauthn">
-                                        </div>
-                                            <div class="col-sm-12">
-                                                <div class="alert.alertClass alert-danger" id="error"></div>
-                                            </div>
+                                <div class="form-row">
+                                    <div class="col-sm-12 mb-3">
+                                        <input type="text" class="form-control form-control-lg" id="username"
+                                               placeholder="Email" x-model="username" autocomplete="username webauthn">
                                     </div>
-                                    <div class="form-row">
-                                        <div class="col-sm-4 mb-3">
-                                            <button class="btn btn-block btn-primary" type="submit" id="register-button" onclick="registerUser()" title="Register a new passkey">
-                                                Register
-                                            </button>
-                                        </div>
+                                    <div class="col-sm-12">
+                                        <div class="alert.alertClass alert-danger" id="error"></div>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="row">
                                         <div class="col-sm-8 mb-3">
-                                            <button class="btn btn-block btn-primary" id="login-button" onclick="loginUser()">
+                                            <button class="btn btn-block btn-primary" id="login-button"
+                                                    onclick="loginUser()">
                                                 Login
                                             </button>
                                         </div>
+                                        <div class="col-sm-4 mb-3">
+                                            <button class="btn btn-block btn-primary" type="submit" id="register-button"
+                                                    onclick="registerUser()" title="Register a new passkey">
+                                                Register
+                                            </button>
+                                        </div>
                                     </div>
+                                </div>
                             </section>
+                        </div>
                     </div>
                 </div>
-           </div>
+            </div>
         </div>
     </div>
 </div>
-</div>
-
-
-
-
-
-
-
 
 
 <!--

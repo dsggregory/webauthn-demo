@@ -7,6 +7,13 @@ function checkUserRegistrationCeremony() {
     if (qp !== null) {
         regid = qp
     }
+    const username = urlParams.get('username')
+    if (username !== null) {
+        var elem = document.getElementById("username")
+        if (elem !== null) {
+            elem.value = username
+        }
+    }
 }
 
 function registerUser() {
