@@ -127,7 +127,7 @@ func (s *DBService) NewUser(email, displayname string) *model.Contact {
 // PutUserCredentials update webauthn user record with current sets of known credentials for the user. It invalidates
 // any current registration_id for the user.
 func (s *DBService) PutUserCredentials(contact *model.Contact) error {
-	return s.db.Model(&contact).Update("credentials", contact.Credentials).Update("registration_id", "").Error
+	return s.db.Model(contact).Where("id = ?", contact.ID).Updates(map[string]interface{}{"credentials": contact.Credentials, "registration_id": ""}).Error
 }
 
 func (s *DBService) DeleteContact(cid uint) error {

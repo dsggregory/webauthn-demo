@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bytes"
 	"encoding/binary"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
@@ -53,9 +54,25 @@ func (u Contact) WebAuthnIcon() string {
 	return ""
 }
 
-// AddCredential associates the credential to the user
+// GetCredentialByID returns the offset into u.Credentials for the found credential or -1 if not found
+func (u *Contact) GetCredentialByID(id []byte) int {
+	for i, uc := range u.Credentials {
+		if bytes.Equal(uc.ID, id) {
+			return i
+		}
+	}
+	return -1
+}
+
+// AddCredential associates the credential to the user record. Can also be used to update (not in DB) the credential for the user
 func (u *Contact) AddCredential(cred webauthn.Credential) {
-	u.Credentials = append(u.Credentials, cred)
+	// Check to see if we are replacing the credential data. This use case is largely to update the cred.SignCount.
+	if ucoff := u.GetCredentialByID(cred.ID); ucoff >= 0 {
+		u.Credentials[ucoff] = cred
+	} else {
+		// a new credential
+		u.Credentials = append(u.Credentials, cred)
+	}
 }
 
 // WebAuthnCredentials returns Credentials owned by the user

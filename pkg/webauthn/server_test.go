@@ -50,6 +50,61 @@ func createTestService() (*MockWebauthnService, error) {
 	return NewMockWebauthnService(dbsvc, nil)
 }
 
+func testLogin(c C, tsvc *MockWebauthnService) *http.Cookie {
+	var webauthnSessionCookie *http.Cookie
+
+	//**** login/begin
+	req, _ := http.NewRequest(http.MethodGet, tsvc.ts.URL+"/login/begin/"+tsvc.contact.Email, http.NoBody)
+	resp, err := http.DefaultClient.Do(req)
+	So(err, ShouldBeNil)
+	So(resp, ShouldNotBeNil)
+	So(resp.StatusCode, ShouldEqual, http.StatusOK)
+
+	body, err := io.ReadAll(resp.Body)
+	So(err, ShouldBeNil)
+	_ = resp.Body.Close()
+
+	// Parses the assertion options we got from the relying party to ensure they're valid
+	parsedAssertionOptions, err := virtualwebauthn.ParseAssertionOptions(string(body))
+	So(err, ShouldBeNil)
+
+	// parse them as the struct to test more
+	credOpts := protocol.CredentialCreation{}
+	err = json.Unmarshal(body, &credOpts)
+	So(credOpts.Response.Challenge, ShouldNotBeNil)
+
+	// to be added to req to /registration/finalize
+	webauthnSessionCookie = GetResponseSessionCookie(resp)
+	So(webauthnSessionCookie, ShouldNotBeNil)
+
+	//**** login/finish
+	// Creates an assertion response that we can send to the relying party as if it came from
+	// an actual browser and authenticator.
+	tsvc.credential.Counter++ // an authenticator (yubi, et.al. but not passkeys) would do this
+	attestationResponse := virtualwebauthn.CreateAssertionResponse(*tsvc.rp, tsvc.authenticator, tsvc.credential, *parsedAssertionOptions)
+	arBody := io.NopCloser(bytes.NewReader([]byte(attestationResponse)))
+
+	req, _ = http.NewRequest(http.MethodPost, tsvc.ts.URL+"/login/finish/"+tsvc.contact.Email, arBody)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(webauthnSessionCookie)
+
+	resp, err = http.DefaultClient.Do(req)
+	So(err, ShouldBeNil)
+	So(resp.StatusCode, ShouldEqual, http.StatusOK)
+
+	var contact *model.Contact
+	credIDb64 := base64.StdEncoding.EncodeToString(tsvc.credential.ID)
+	contact, err = tsvc.dbsvc.GetContactByCredentialID(credIDb64)
+	So(err, ShouldBeNil)
+	So(contact, ShouldNotBeNil)
+	So(contact.Email, ShouldEqual, tsvc.contact.Email)
+
+	tsvc.authenticator.AddCredential(tsvc.credential)
+	webauthnSessionCookie = GetResponseSessionCookie(resp)
+
+	return webauthnSessionCookie
+}
+
 func TestWebauthn(t *testing.T) {
 	tsvc, err := createTestService()
 	if err != nil {
@@ -221,74 +276,30 @@ func TestWebauthn(t *testing.T) {
 				So(resp, ShouldNotBeNil)
 				So(resp.StatusCode, ShouldEqual, http.StatusUnauthorized)
 			})
-			Convey("should login/begin", func() {
-				req, _ := http.NewRequest(http.MethodGet, tsvc.ts.URL+"/login/begin/"+tsvc.contact.Email, http.NoBody)
+			Convey("should login", func(c C) {
+				webauthnSessionCookie := testLogin(c, tsvc)
+
+				//Convey("session should authenticate", func() {
+				lts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// initially what an authentication middleware would do
+					u := tsvc.svr.GetSessionUser(w, r)
+					if u == nil {
+						w.WriteHeader(http.StatusUnauthorized)
+					}
+				}))
+				req, _ := http.NewRequest(http.MethodPost, lts.URL+"/", http.NoBody)
+				req.Header.Set("Content-Type", "application/json")
+				req.AddCookie(webauthnSessionCookie)
+
 				resp, err := http.DefaultClient.Do(req)
 				So(err, ShouldBeNil)
-				So(resp, ShouldNotBeNil)
 				So(resp.StatusCode, ShouldEqual, http.StatusOK)
+				//})
 
-				body, err := io.ReadAll(resp.Body)
-				So(err, ShouldBeNil)
-				resp.Body.Close()
-
-				// Parses the assertion options we got from the relying party to ensure they're valid
-				parsedAssertionOptions, err := virtualwebauthn.ParseAssertionOptions(string(body))
-				So(err, ShouldBeNil)
-
-				// parse them as the struct to test more
-				credOpts := protocol.CredentialCreation{}
-				err = json.Unmarshal(body, &credOpts)
-				So(credOpts.Response.Challenge, ShouldNotBeNil)
-
-				// to be added to req to /registration/finalize
-				webauthnSessionCookie := GetResponseSessionCookie(resp)
+				// Convey("should login a 2nd time and update cred sign count")
+				webauthnSessionCookie = testLogin(c, tsvc)
 				So(webauthnSessionCookie, ShouldNotBeNil)
-
-				Convey("should login/finish", func() {
-
-					// Creates an assertion response that we can send to the relying party as if it came from
-					// an actual browser and authenticator.
-					attestationResponse := virtualwebauthn.CreateAssertionResponse(*tsvc.rp, tsvc.authenticator, tsvc.credential, *parsedAssertionOptions)
-					body := io.NopCloser(bytes.NewReader([]byte(attestationResponse)))
-
-					req, _ := http.NewRequest(http.MethodPost, tsvc.ts.URL+"/login/finish/"+tsvc.contact.Email, body)
-					req.Header.Set("Content-Type", "application/json")
-					req.AddCookie(webauthnSessionCookie)
-
-					resp, err := http.DefaultClient.Do(req)
-					So(err, ShouldBeNil)
-					So(resp.StatusCode, ShouldEqual, http.StatusOK)
-
-					var c *model.Contact
-					credIDb64 := base64.StdEncoding.EncodeToString(tsvc.credential.ID)
-					c, err = tsvc.dbsvc.GetContactByCredentialID(credIDb64)
-					So(err, ShouldBeNil)
-					So(c, ShouldNotBeNil)
-					So(c.Email, ShouldEqual, tsvc.contact.Email)
-
-					tsvc.authenticator.AddCredential(tsvc.credential)
-					webauthnSessionCookie = GetResponseSessionCookie(resp)
-
-					Convey("session should authenticate", func() {
-						lts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-							// initially what an authentication middleware would do
-							u := tsvc.svr.GetSessionUser(w, r)
-							if u == nil {
-								w.WriteHeader(http.StatusUnauthorized)
-							}
-						}))
-						req, _ = http.NewRequest(http.MethodPost, lts.URL+"/", http.NoBody)
-						req.Header.Set("Content-Type", "application/json")
-						req.AddCookie(webauthnSessionCookie)
-
-						resp, err = http.DefaultClient.Do(req)
-						So(err, ShouldBeNil)
-						So(resp.StatusCode, ShouldEqual, http.StatusOK)
-					})
-				})
 			})
 		})
 	})
-
 }

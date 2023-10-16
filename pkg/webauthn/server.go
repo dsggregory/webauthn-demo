@@ -248,6 +248,26 @@ func (s *Server) beginLogin(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, options, http.StatusOK)
 }
 
+func (s *Server) updateSignCount(user *model.Contact, cred webauthn.Credential) error {
+	// update credential sign count
+	ucoff := user.GetCredentialByID(cred.ID)
+	if ucoff < 0 {
+		return fmt.Errorf("cred not found in contact")
+	}
+	// SignCount -Upon a new login operation, the Relying Party compares the stored signature counter
+	// value with the new signCount value returned in the assertion’s authenticator data. If this new
+	// signCount value is less than or equal to the stored value, a cloned authenticator may exist,
+	// or the authenticator may be malfunctioning.
+	// NOTE: SignCount will always be zero for passkeys (but not yubi, etc.) as they do not support this feature
+	if user.Credentials[ucoff].Authenticator.SignCount != cred.Authenticator.SignCount {
+		user.Credentials[ucoff].Authenticator.SignCount = cred.Authenticator.SignCount
+		if err := s.userDB.PutUserCredentials(user); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request) {
 
 	// get username
@@ -291,6 +311,11 @@ func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request) {
 	if cred.Authenticator.CloneWarning {
 		l.WithError(err).Errorf("credential appears to be cloned")
 		jsonResponse(w, "credential cloned", http.StatusForbidden)
+		return
+	}
+
+	if err := s.updateSignCount(user, *cred); err != nil {
+		jsonResponse(w, "cannot update credential sign counter", http.StatusForbidden)
 		return
 	}
 
@@ -361,7 +386,6 @@ func (s *Server) verifyDiscoverableLogin(w http.ResponseWriter, r *http.Request)
 		jsonResponse(w, err, http.StatusExpectationFailed)
 		return
 	}
-	_ = cred
 
 	// At this point, we've confirmed the correct authenticator has been
 	// provided and it passed the challenge we gave it. We now need to make
@@ -370,6 +394,11 @@ func (s *Server) verifyDiscoverableLogin(w http.ResponseWriter, r *http.Request)
 	if cred.Authenticator.CloneWarning {
 		logrus.WithError(err).Errorf("credential appears to be cloned")
 		jsonResponse(w, "credential cloned", http.StatusForbidden)
+		return
+	}
+
+	if err := s.updateSignCount(validatedContact, *cred); err != nil {
+		jsonResponse(w, "cannot update credential sign counter", http.StatusForbidden)
 		return
 	}
 
