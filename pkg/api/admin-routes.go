@@ -17,29 +17,9 @@ const (
 	AdminAPIPrefix = ""
 )
 
-// TODO remove this once we figure out how to send a properly mocked webauthn session cookie in tests
-var InTest = false
-
-const XTestAuthHeader = "X-TEST-AUTH"
-
-func (s *Server) testLoginRequired(next http.Handler, w http.ResponseWriter, r *http.Request) {
-	logrus.Warn("USING TEST AUTH")
-	h := r.Header.Get(XTestAuthHeader)
-	if h != "" {
-		next.ServeHTTP(w, r)
-		return
-	}
-	http.Redirect(w, r, "/signin", http.StatusTemporaryRedirect)
-}
-
 // LoginRequired middleware to check that webauthn session is valid before calling the protected handler
 func (s *Server) adminLoginRequired(next http.Handler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if InTest {
-			s.testLoginRequired(next, w, r)
-			return
-		}
-
 		u := s.webautnSvc.GetSessionUser(w, r)
 
 		if u != nil {

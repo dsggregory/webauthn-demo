@@ -127,7 +127,6 @@ func NewServer(cfg *config.AppSettings, db *db.DBService) (*Server, error) {
 	}
 	s.webautnSvc, err = webauthnapi.NewServer(&webauthnapi.WebauthnConfig{
 		WebsiteURL:         cfg.WebsiteURL,
-		StaticPages:        s.cfg.StaticPages,
 		Router:             s.mux,
 		RenderTemplateFunc: s.renderTemplate,
 		UserDB:             db,

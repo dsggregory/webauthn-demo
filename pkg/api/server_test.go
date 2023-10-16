@@ -12,11 +12,8 @@ import (
 	"webauthndemo/pkg/config"
 	"webauthndemo/pkg/db"
 	"webauthndemo/pkg/model"
+	webauthnapi "webauthndemo/pkg/webauthn"
 )
-
-func init() {
-	InTest = true
-}
 
 type MockResponseWriter struct {
 	body       []byte
@@ -43,43 +40,6 @@ func (w *MockResponseWriter) Write(b []byte) (int, error) {
 func (w *MockResponseWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
 }
-
-/***
-func tryingToSendSessionCookie() {
-	// mock a user login session
-	store := api.webautnSvc.SessionStore()
-	store.Options.Path = "/"
-	ckjar, _ := cookiejar.New(nil)
-	hclient := &http.Client{
-		Jar: ckjar,
-	}
-
-	w := NewMockResponseWriter()
-	err = store.Set(SessionUserID, "1", req, w) // a login session
-	So(err, ShouldBeNil)
-	session, err := store.Get(req, WebauthnSession)
-	So(err, ShouldBeNil)
-	So(session.Values[SessionUserID], ShouldEqual, "1")
-	So(session.Save(req, w), ShouldBeNil)
-	ck := w.Header().Get("Set-Cookie")
-	a := strings.Split(ck, "=")
-	uidCookie := &http.Cookie{
-		Name:   a[0],
-		Value:  a[1],
-		MaxAge: 300,
-	}
-	req.AddCookie(uidCookie)
-	u, _ := url.Parse(ts.URL)
-	ckjar.SetCookies(u, []*http.Cookie{
-		&http.Cookie{
-			Name:    WebauthnSession,
-			Value:   `MTY5NjI2NzIzNHxEdi1CQkFFQ180SUFBUkFCRUFBQV9nR3BfNElBQWdaemRISnBibWNNRGdBTVpHbHpZMjkyWlhKaFlteGxCMXRkZFdsdWREZ0tfNDBBXzRwN0ltTm9ZV3hzWlc1blpTSTZJbEZrVDIxSGMwbFVSekpMY2psWGVHODRNMVV0WjI0MlJGcGhZVnBqU2psMVNtWmlla3d0U1hSVldqQWlMQ0oxYzJWeVgybGtJanB1ZFd4c0xDSmxlSEJwY21Weklqb2lNREF3TVMwd01TMHdNVlF3TURvd01Eb3dNRm9pTENKMWMyVnlWbVZ5YVdacFkyRjBhVzl1SWpvaWNISmxabVZ5Y21Wa0luMEdjM1J5YVc1bkRCQUFEbUYxZEdobGJuUnBZMkYwYVc5dUIxdGRkV2x1ZERnS185SUFfODk3SW1Ob1lXeHNaVzVuWlNJNkltWlpUM2xaYkdaeFJqUXRkelJVZUdWc2VVMVdaRzlJVVZSeVkxZGZRMWRSYlZNd1VtSktlak5oTkRnaUxDSjFjMlZ5WDJsa0lqb2lRVkZCUVVGQlFVRkJRVUZCUVVFOVBTSXNJbUZzYkc5M1pXUmZZM0psWkdWdWRHbGhiSE1pT2xzaU5ESktjWFpKYmtWNFJETXpZMEkzZDAxMVVsTjZUR2d4TmtselBTSmRMQ0psZUhCcGNtVnpJam9pTURBd01TMHdNUzB3TVZRd01Eb3dNRG93TUZvaUxDSjFjMlZ5Vm1WeWFXWnBZMkYwYVc5dUlqb2ljSEpsWm1WeWNtVmtJbjA9fLxveehe26dVh9QemrvcRsUKjwnTCYiUmJ1VpEKakJOW`,
-			Path:    "/",
-			Expires: time.Now().Add(time.Hour),
-		},
-	})
-}
-*/
 
 var (
 	testDBPath = "./test_db.db"
@@ -184,12 +144,16 @@ func TestCustomerRoutes(t *testing.T) {
 		defer tsvc.Close()
 
 		Convey("test admin routes", func() {
+			mts, err := webauthnapi.NewMockWebauthnService(tsvc.dbsvc, tsvc.svr.webautnSvc)
+			sessionCookie, err := mts.NewLoggedInUser()
+			So(err, ShouldBeNil)
+
 			Convey("should rotate api key", func() {
 				ocontact, err := tsvc.dbsvc.GetContact(1)
 				So(err, ShouldBeNil)
 				req, err := http.NewRequest(http.MethodPut, tsvc.ts.URL+AdminAPIPrefix+"/apikey/1", http.NoBody)
 				So(err, ShouldBeNil)
-				req.Header.Set(XTestAuthHeader, "---")
+				req.AddCookie(sessionCookie)
 
 				resp, err := http.DefaultClient.Do(req)
 				So(err, ShouldBeNil)
@@ -203,7 +167,7 @@ func TestCustomerRoutes(t *testing.T) {
 				So(err, ShouldBeNil)
 				req, err := http.NewRequest(http.MethodDelete, tsvc.ts.URL+AdminAPIPrefix+"/apikey/1", http.NoBody)
 				So(err, ShouldBeNil)
-				req.Header.Set(XTestAuthHeader, "---")
+				req.AddCookie(sessionCookie)
 
 				resp, err := http.DefaultClient.Do(req)
 				So(err, ShouldBeNil)
@@ -215,7 +179,7 @@ func TestCustomerRoutes(t *testing.T) {
 			Convey("should delete customer", func() {
 				req, err := http.NewRequest(http.MethodDelete, tsvc.ts.URL+AdminAPIPrefix+"/customer/1", http.NoBody)
 				So(err, ShouldBeNil)
-				req.Header.Set(XTestAuthHeader, "---")
+				req.AddCookie(sessionCookie)
 
 				resp, err := http.DefaultClient.Do(req)
 				So(err, ShouldBeNil)
@@ -226,7 +190,7 @@ func TestCustomerRoutes(t *testing.T) {
 			Convey("should delete contact", func() {
 				req, err := http.NewRequest(http.MethodDelete, tsvc.ts.URL+AdminAPIPrefix+"/contact/1", http.NoBody)
 				So(err, ShouldBeNil)
-				req.Header.Set(XTestAuthHeader, "---")
+				req.AddCookie(sessionCookie)
 
 				resp, err := http.DefaultClient.Do(req)
 				So(err, ShouldBeNil)

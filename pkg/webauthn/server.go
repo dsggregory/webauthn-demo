@@ -52,8 +52,6 @@ func (s *Server) SessionStore() *Store {
 type WebauthnConfig struct {
 	// WebsiteURL used for default RPOrigins. MUST be the exact URL used to access your site.
 	WebsiteURL string
-	// StaticPages path to static web pages relative to where the server is started
-	StaticPages string
 	// Router existing gorilla mux to add routes
 	Router *mux.Router
 	// RenderTemplateFunc the main server's function to render a named template HTML file
@@ -68,7 +66,7 @@ type WebauthnConfig struct {
 	RPID string
 	// RPOrigins relying party's possible origins. Optional other origin URLs allowed for WebAuthn requests.
 	RPOrigins     []string
-	LogMiddleware mux.MiddlewareFunc
+	LogMiddleware func(next http.Handler) http.Handler
 }
 
 func jsonResponse(w http.ResponseWriter, d interface{}, c int) {
