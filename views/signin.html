@@ -13,6 +13,11 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
     <script src="index.js"></script>
     <script>
+        // check whether current browser supports WebAuthn
+        if (!window.PublicKeyCredential) {
+            alert("Error: this browser does not support WebAuthn");
+            return;
+        }
         $(document).ready(function () {
             $('#username').keypress(function (e) {
                 if (e.keyCode == 13)
@@ -20,6 +25,10 @@
             });
 
             checkUserRegistrationCeremony()
+            if (typeof regid === 'undefined' || regid === null) {
+                // this interferes with the registration ceremony
+                autofillUI();
+            }
         });
     </script>
 </head>
