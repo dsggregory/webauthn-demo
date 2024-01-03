@@ -12,6 +12,16 @@ See [Passkey Notes](./PasskeyNotes.md) for more detail.
 ### HTTP(s) Only
 This demo does not use TLS so only a connection to http://localhost:8080 will be able to perform WebAuthn functions. I've only tested with Safari on a Mac.
 
+### Authenticators
+#### MacOS
+Since Ventura, MacOS has support for passkeys using Safari as the authenticator. Meaning, you must use Safari.
+
+#### Windows
+Windows 10 and up include support for passkeys. However, you MUST have Windows Hello setup to be used as the authenticator. Otherwise, the only authenticator option would be an external security key such a YubiKey.
+
+#### Remote Authenticators
+Passkeys from other devices may be used if both the device and that of your browser have Bluetooth enabled.
+
 ## Demo Walk Through
 ### Run it
 
